@@ -1,6 +1,0 @@
-Makefile
-Winter2020/build/*
-Winter2020/BNO055_driver/*
-Winter2020/pololu_imu/*
-Winter2020/IMU_math/*
-*.map
