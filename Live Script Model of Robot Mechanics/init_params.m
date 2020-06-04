@@ -80,6 +80,9 @@ function params = init_params
     params.sim.tfinal = 6;          % Length of the simulation
     params.sim.dt = 0.05;           % simulation timestep
 
+    % load picture of the robot
+    params.sim.img = imread("bike_imgs/fromDan.png");
+
     
     % variables related to the constraints
     params.sim.constraints.number = 6;  % total number of constraint equations

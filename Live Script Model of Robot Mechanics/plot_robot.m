@@ -76,6 +76,10 @@ bw_fw_distance = params.model.geom.bw_fw.l;
 x_bf = q(1);
 y_bf = q(2);
 theta_com = q(3);
+if theta_com > 0
+    display("here")
+end
+
 theta_bw = q(4);
 theta_fw = q(5);
 
@@ -83,11 +87,11 @@ g_wbf = [[cos(0), -sin(0), x_bf];
           [sin(0), cos(0), y_bf];
           [0, 0, 1]];
       
-g_wbf_img_bot = [[cos(0), -sin(0), x_bf-0.2]; %-0.2
-                [sin(0), cos(0), y_bf+0.4]; %0.4
+g_wbf_img_bot = [[cos(0), -sin(0), x_bf]; %-0.2
+                [sin(0), cos(0), y_bf]; %0.4
                  [0, 0, 1]];
-g_wbf_img_upp = [[cos(0), -sin(0), x_bf+0.35]; % 0.35
-                [sin(0), cos(0), y_bf-0.25]; %-0.25
+g_wbf_img_upp = [[cos(0), -sin(0), x_bf]; % 0.35
+                [sin(0), cos(0), y_bf]; %-0.25
                  [0, 0, 1]];
 
 g_rot = [[cos(bw_com_init_angle + theta_com), -sin(bw_com_init_angle + theta_com), 0]; 
@@ -198,18 +202,34 @@ tform = affine2d([ ...
 
 %load the image
 %[img, map, alphachannel] = imread(s);
-[img, map, alphachannel] = imread("bike_imgs/bike_0.png");
+%[img, map, alphachannel] = imread("bike_imgs/bike_0.png");
 %rotate the image
-img =  imwarp(img,tform);
+%img =  imwarp(params.sim.img,tform);
+%temppic = imresize(params.sim.img,0.2); 
+img = imrotate(params.sim.img, -theta,'crop'); 
+
+topleft = [comX-(0.55/2); comY+(0.65/2);1]; 
+topright = [comX+(0.55/2); comY+(0.65/2);1]; 
+bottomleft = [comX-(0.55/2); comY-(0.65/2);1]; 
+bottomright = [comX+(0.55/2); comY-(0.65/2);1]; 
+
 alphachannel = ~all(img == 0, 3);
 %Move the image into position
-T_img_bot = g_wbf_img_bot*g_bf_com*g_rot_rev;
-T_img_upp = g_wbf_img_upp*g_bf_com*g_rot_rev;
-img_x = [T_img_bot(1,3),T_img_upp(1,3)];
-img_y = [T_img_bot(2,3), T_img_upp(2,3)];
+T_topleft = g_wbf_img_upp*g_bf_com*g_rot_rev*topleft;
+T_topright = g_wbf_img_upp*g_bf_com*g_rot_rev*topright;
+T_bottomleft = g_wbf_img_bot*g_bf_com*g_rot_rev*bottomleft;
+T_bottomright = g_wbf_img_bot*g_bf_com*g_rot_rev*bottomright;
+
+xposCorner = [T_topleft(1),T_topright(1),T_bottomleft(1),T_bottomright(1)];
+yposCorner = [T_topleft(2),T_topright(2),T_bottomleft(2),T_bottomright(2)];
+
+img_x = [min(xposCorner),max(yposCorner)]; %[comX-0.2,comX+0.35];
+img_y = [max(xposCorner),min(yposCorner)]; %[comY+0.4,comY-0.25];
 
 %Create image
 image(img_x,img_y,img,'AlphaData', alphachannel);
+%image(img,'AlphaData', alphachannel);
+axis image; 
 %Flip image so it's not upside down
 set(gca,'YDir','normal')
 
