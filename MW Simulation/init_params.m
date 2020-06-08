@@ -20,7 +20,6 @@ function params = init_params
      params.model.dyn.com.I = 0.069; % moment of inertia of com
      
      params.model.dyn.com.l = 0.26; % Height of CoM above the ground
-     params.model.dyn.mw.offset = 0; % offset between CoM and MW
 
      params.model.dyn.g = 9.81;      % acceleration due to gravity
      params.model.dyn.tau_mw = -1;    % applied torque from the backwheel

@@ -65,18 +65,22 @@ spook_tip = g_wmw*spook; %position of the spook in the bike's frame
 %% Compute the roll-angle of the bike and location of the momentum wheels
 body.home.com.x = l_com*cos(theta_bike); %x-center of the Bike
 body.home.com.y = l_com*sin(theta_bike); %y-center of the Bike
+
+% body.home.mw.x = (l_com+offset)*cos(theta_bike); %x-center of the momentum wheel
+% body.home.mw.y = (l_com+offset)*sin(theta_bike); %y-center of the momentum wheel
                    
 %% Display the Momentum Wheel
 if p.Results.new_fig
     figure;
 end
 
-%Create a circle to represent the Momentum Wheel
+%
 circle(body.home.com.x,body.home.com.y,mw_r,params.viz.colors.mw)
 hold on;
-%Create a stick figure to represent the Bike and Spook
+%Create wheels
 segment(body.home.com.x, body.home.com.y,spook_tip(1),spook_tip(2), 'red');
 segment(0, 0, body.home.com.x, body.home.com.y, 'blue');
+
 
 %Add Marker for CoM
 %  plot(body.home.com.x, body.home.com.y,'o','MarkerSize',0.1,...

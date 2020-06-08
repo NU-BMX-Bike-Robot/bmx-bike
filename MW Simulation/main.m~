@@ -102,6 +102,16 @@ end
 % (https://www.mathworks.com/matlabcentral/answers/321603-how-do-i-interpolate-1d-data-if-i-do-not-have-unique-values
 tsim = cumsum(ones(size(tsim)))*eps + tsim;
 
+% % 2) resample the duplicate-free time vector:
+% t_anim = 0:params.viz.dt:tsim(end);
+% 
+% % 3) resample the state-vs-time array:
+% % x_anim = interp1(tsim, xsim, t_anim); %x_anim doesn't run in airborne
+% x_anim = xsim'; % transpose so that xsim is 2xN (N = number of timesteps)
+%  
+% animate_robot(x_anim(1:2,:),params,'trace_cart_com',false,...
+% 'trace_pend_com',false,'trace_pend_tip',false,'video',true);
+
 anim_table = table(tsim,xsim);
 [~,ia] = unique(anim_table.tsim);
 anim_table_unique = anim_table(ia,:);
@@ -110,8 +120,8 @@ anim_table_unique = anim_table(ia,:);
 t_anim = 0:params.viz.dt:tsim(end);
 
 % 3) resample the state-vs-time array:
-x_anim = interp1(anim_table_unique.tsim, anim_table_unique.xsim, t_anim);
-x_anim = x_anim'; % transpose so that xsim is 2xN (N = number of timesteps)
+x_anim = interp1(anim_table_unique.tsim, anim_table_unique.xsim, t_anim); %x_anim doesn't run in airborne
+x_anim = x_anim'; % transpose so that xsim is 5xN (N = number of timesteps)
  
 animate_robot(x_anim(1:2,:),params,'trace_cart_com',false,...
     'trace_pend_com',false,'trace_pend_tip',false,'video',true);
@@ -123,12 +133,12 @@ animate_robot(x_anim(1:2,:),params,'trace_cart_com',false,...
 function [dx] = robot_dynamics_constraints(t,x)
 % Robot Dynamics
 % Description:
-%          Since there's no constraints in the system, the derivated of the
-%          state is computed as followed:
+%   Computes the constraint forces: 
+%       Fnow = inv(A*Minv*A')*(A*Minv*(Q-H) + Adotqdot)
 %
-%   Computes the derivative of the state:
-%       x_dot(1:2) = I*x(3:4)
-%       x_dot(3:4) = inv(M)*(Q - H)
+%   Also computes the derivative of the state:
+%       x_dot(1:2) = (I - A'*inv(A*A')*A)*x(6:10)
+%       x_dot(3:4) = inv(M)*(Q - H - A'F)
 %
 % Inputs:
 %   t: time (scalar)
@@ -138,7 +148,6 @@ function [dx] = robot_dynamics_constraints(t,x)
 % Outputs:
 %   dx: derivative of state x with respect to time.
 % for convenience, define q_dot
-
 dx = zeros(numel(x),1);
 nq = numel(x)/2;    % assume that x = [q;q_dot];
 q_dot = x(nq+1:2*nq);
@@ -156,8 +165,6 @@ switch params.sim.constraints
 end
 end
  
-% robot_events is unneccessary because there is only one event in Momentum
-% Wheel simulation
 function [value,isterminal,direction] = robot_events(~,~)
     switch params.sim.constraints
         case ['balancing']

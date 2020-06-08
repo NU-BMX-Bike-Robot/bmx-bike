@@ -19,7 +19,6 @@ l_com = params.model.dyn.com.l;
 I_mw = params.model.dyn.mw.I;
 m_mw = params.model.dyn.mw.m;
 m_bike = params.model.dyn.com.m;
-offset = params.model.dyn.mw.offset;
 
 Minv = autogen_inverse_mass_matrix(I_bike,I_mw,l_com,m_bike,m_mw);
 
