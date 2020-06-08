@@ -27,11 +27,13 @@ x_IC = [params.sim.ICs.theta_bike;
         params.sim.ICs.dtheta_bike;
         params.sim.ICs.dtheta_mw];
 
+% Variables for digital control
 twrite = 0;
 dt = 1/50;
 delay = .001;
-tau = 0;
+control = 0;
 memory = [0;0;0];
+alltau = []; 
 
 % create a place for constraint forces populated in
 % robot_dynamic_constraints function
@@ -58,18 +60,32 @@ while params.sim.tfinal - twrite > params.sim.dt
     t_read = tseg(end)-delay;
     x_read = interp1(tseg,xseg,t_read);
     
+    % Generate voltage command
     [control,eint,prevEr] = MWController(x_read(1),memory(2,end),memory(3,end));
-    tau = -Motor(control,x_read(3));
     memory = [memory [x_read(1);eint;prevEr]];     
+    
+    % Limit voltage to feasible values
+    if control > 3
+        control = 3;
+    elseif control <-3
+        control = -3;
+    end
+    
     
     twrite = tsim(end); % set the current time to where the integration stopped
     x_IC = xsim(end,:); % set the initial condition to where the integration stopped
+    
+    counter = size(tseg,1);
+    
+    % Track voltage controls
+    for i = 1:counter
+        alltau = [alltau;control]; % build up vector of all tau commands
+    end
  
 end
 
 % transpose xsim_passive so that it is 5xN (N = number of timesteps):
 
-% Create an array for Energy of the system
 for i = 1:size(xsim,1)
     tempE = energy(xsim(i,:),params);
     E = [E; tempE];
@@ -81,19 +97,34 @@ end
  
  
  % plot theta_bike and theta_mw of the robot
- subplot(3,1,1), plot(tsim,xplot(1,:),'b-',...
-                      tsim,xplot(2,:),'r-','LineWidth',2);
-                 legend('theta_bike','theta_mw');
+ subplot(3,1,1), plot(tsim,xplot(1,:),'r-','LineWidth',2);
+                  title('Bike Angle vs Time')
+                  xlabel('time');
+                  ylabel('Bike Angle')
+                  set(gca,'FontSize',11)
+
                   
  % plot the angular velocity of the bike and MW of the robot
- subplot(3,1,2), plot(tsim,xplot(3,:),'b:',...
-                      tsim,xplot(4,:),'r:','LineWidth',2);
-                  legend('dtheta_bike','dtheta_mw');
- 
- % plot the total energy of the system                 
- subplot(3,1,3),plot(tsim, E)
-                   legend('energy');
+ subplot(3,1,2), plot(tsim,xplot(4,:),'b:','LineWidth',2);
+                  xlabel('time')
+                  ylabel('MW Velocity')
+                  set(gca,'FontSize',11)
+                  title('Momentum Wheel Velocity vs Time')
 
+ 
+ %{                 
+ % plot system energy                
+ subplot(4,1,3),plot(tsim, E)
+                   legend('energy');
+%}
+ % plot commanded tau values
+ alltau(numel(tsim)) = 0;
+ subplot(3,1,3), plot(tsim,alltau,'r:','LineWidth',2);
+ xlabel('time')
+ ylabel('torque')
+ set(gca,'FontSize',11)
+ title('Commanded Voltage to Back Wheel vs Time','FontSize',12)
+ 
  pause(1); % helps prevent animation from showing up on the wrong figure
  
 % Let's resample the simulator output so we can animate with evenly-spaced
@@ -101,6 +132,16 @@ end
 % 1) deal with possible duplicate times in tsim:
 % (https://www.mathworks.com/matlabcentral/answers/321603-how-do-i-interpolate-1d-data-if-i-do-not-have-unique-values
 tsim = cumsum(ones(size(tsim)))*eps + tsim;
+
+% % 2) resample the duplicate-free time vector:
+% t_anim = 0:params.viz.dt:tsim(end);
+% 
+% % 3) resample the state-vs-time array:
+% % x_anim = interp1(tsim, xsim, t_anim); %x_anim doesn't run in airborne
+% x_anim = xsim'; % transpose so that xsim is 2xN (N = number of timesteps)
+%  
+% animate_robot(x_anim(1:2,:),params,'trace_cart_com',false,...
+% 'trace_pend_com',false,'trace_pend_tip',false,'video',true);
 
 anim_table = table(tsim,xsim);
 [~,ia] = unique(anim_table.tsim);
@@ -110,8 +151,8 @@ anim_table_unique = anim_table(ia,:);
 t_anim = 0:params.viz.dt:tsim(end);
 
 % 3) resample the state-vs-time array:
-x_anim = interp1(anim_table_unique.tsim, anim_table_unique.xsim, t_anim);
-x_anim = x_anim'; % transpose so that xsim is 2xN (N = number of timesteps)
+x_anim = interp1(anim_table_unique.tsim, anim_table_unique.xsim, t_anim); %x_anim doesn't run in airborne
+x_anim = x_anim'; % transpose so that xsim is 5xN (N = number of timesteps)
  
 animate_robot(x_anim(1:2,:),params,'trace_cart_com',false,...
     'trace_pend_com',false,'trace_pend_tip',false,'video',true);
@@ -123,12 +164,12 @@ animate_robot(x_anim(1:2,:),params,'trace_cart_com',false,...
 function [dx] = robot_dynamics_constraints(t,x)
 % Robot Dynamics
 % Description:
-%          Since there's no constraints in the system, the derivated of the
-%          state is computed as followed:
+%   Computes the constraint forces: 
+%       Fnow = inv(A*Minv*A')*(A*Minv*(Q-H) + Adotqdot)
 %
-%   Computes the derivative of the state:
-%       x_dot(1:2) = I*x(3:4)
-%       x_dot(3:4) = inv(M)*(Q - H)
+%   Also computes the derivative of the state:
+%       x_dot(1:2) = (I - A'*inv(A*A')*A)*x(6:10)
+%       x_dot(3:4) = inv(M)*(Q - H - A'F)
 %
 % Inputs:
 %   t: time (scalar)
@@ -138,26 +179,39 @@ function [dx] = robot_dynamics_constraints(t,x)
 % Outputs:
 %   dx: derivative of state x with respect to time.
 % for convenience, define q_dot
-
 dx = zeros(numel(x),1);
 nq = numel(x)/2;    % assume that x = [q;q_dot];
 q_dot = x(nq+1:2*nq);
+
+% Analog Motor Model
+tau = -Motor(control,x(3));
+
+% Limit torque to feasible values
+if tau> 2.5
+    tau = 2.5;
+elseif tau<-2.5
+    tau = -2.5;
+end
 
 Q = [0;tau];
 
 % find the parts that don't depend on constraint forces
 H = H_eom(x,params);
 Minv = inv_mass_matrix(x,params);
+[A_all,Hessian] = constraint_derivatives(x,params);
 
 switch params.sim.constraints
     case 'balancing'
+%         disp("Changed Constraint!");
+        %A = A_all(1,:);
+        %Adotqdot = q_dot'*Hessian(:,:,1)*q_dot;  % robot position x-constraint
+        %Fnow = (A*Minv*A')\(A*Minv*(Q - H) + Adotqdot);
         dx(1:nq) = eye(nq)*x(3:4);
         dx(nq+1:2*nq) = Minv*(Q - H);
+        %F_calc = Fnow;
 end
 end
  
-% robot_events is unneccessary because there is only one event in Momentum
-% Wheel simulation
 function [value,isterminal,direction] = robot_events(~,~)
     switch params.sim.constraints
         case ['balancing']
