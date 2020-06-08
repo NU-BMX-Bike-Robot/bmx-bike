@@ -9,6 +9,8 @@
 -  Hardware Motor Control: C library to use ESC to control motors
 -  Winter 2020: Libraries for sensors and motor used Winter 2020 
 
+[Master Document]( https://docs.google.com/document/d/112T-qBwZc48j-RG0OkhzOahXLl4ac53vHrYeIj2Djsc/edit?usp=sharing)
+
 Videos of the animations in the team Google Drive. 
 
 ## Instruction to run simulations
